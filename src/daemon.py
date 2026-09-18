@@ -61,6 +61,17 @@ os.makedirs(DATA_DIR, exist_ok=True)
 CONFIG_PATH = os.path.join(HERE, "config.json")
 DAEMON_LOG = os.path.join(DATA_DIR, "daemon.log")
 DAEMON_LOCK = os.path.join(DATA_DIR, "daemon.lock")
+
+# 全局实例锁 —— 放在用户目录，**所有**实例都能看到。
+#
+# 为什么需要它：exe 版的数据目录是 dist\data，源码版是项目根的 data，
+# 两边各写各的 daemon.lock，互相根本看不见。结果就是能同时开两个监听，
+# 同一个会话被两个进程一起盯：每条消息回两遍，而且两个进程抢同一个微信窗口，
+# 发送被拖到八九十秒、多条内容还会粘成一条发过去。
+# 这把锁路径固定，谁先起来谁占住，后来的直接退出。
+GLOBAL_LOCK_DIR = os.path.join(os.environ.get("LOCALAPPDATA")
+                               or os.path.expanduser("~"), "wechat-auto-reply")
+GLOBAL_LOCK = os.path.join(GLOBAL_LOCK_DIR, "instance.lock")
 REPLY_PATH = os.path.join(DATA_DIR, "reply.txt")
 SEND_RESULT = os.path.join(DATA_DIR, "send_result.json")
 STATS_PATH = os.path.join(DATA_DIR, "daemon_stats.json")
@@ -119,18 +130,55 @@ def self_lock_alive():
     return monitor.heartbeat_alive(DAEMON_LOCK)
 
 
+def _lock_payload(interval=0):
+    return {"pid": os.getpid(), "interval": int(interval or 0),
+            "heartbeat_ts": time.time(),
+            "heartbeat": datetime.now().isoformat(timespec="seconds"),
+            "source": "exe" if runner.is_frozen() else "源码",
+            "app_dir": HERE}
+
+
+def global_lock_alive():
+    """有没有**别的**实例在跑（exe 版 / 源码版都算）。返回它的信息，没有则返回 None"""
+    try:
+        os.makedirs(GLOBAL_LOCK_DIR, exist_ok=True)
+    except OSError:
+        pass
+    if not os.path.exists(GLOBAL_LOCK):
+        return None
+    info = monitor.load_json(GLOBAL_LOCK, {}) or {}
+    if not info or info.get("pid") == os.getpid():
+        return None          # 锁是自己的，不算冲突
+    # 只认 pid 探活，不看心跳时间：进程没了就是没了。
+    # 否则「被强杀留下的锁」会因为心跳还算新鲜而被当成活实例，
+    # 结果是被杀掉的那个还能挡住新实例两分钟。
+    try:
+        return info if monitor.pid_alive(info.get("pid")) else None
+    except Exception:
+        return info if monitor.heartbeat_alive(GLOBAL_LOCK) else None
+
+
 def self_lock_touch(interval=0):
-    monitor.save_json(DAEMON_LOCK, {
-        "pid": os.getpid(), "interval": int(interval or 0),
-        "heartbeat_ts": time.time(),
-        "heartbeat": datetime.now().isoformat(timespec="seconds")})
+    payload = _lock_payload(interval)
+    monitor.save_json(DAEMON_LOCK, payload)
+    # 全局锁一起更新，让另一个目录里的实例也能看到我
+    try:
+        monitor.save_json(GLOBAL_LOCK, payload)
+    except OSError:
+        pass
 
 
 def self_lock_release():
-    try:
-        os.remove(DAEMON_LOCK)
-    except OSError:
-        pass
+    for p in (DAEMON_LOCK, GLOBAL_LOCK):
+        try:
+            # 全局锁只在「确实是自己的」时候删，别把别人的锁删了
+            if p == GLOBAL_LOCK:
+                info = monitor.load_json(p, {}) or {}
+                if info.get("pid") not in (None, os.getpid()):
+                    continue
+            os.remove(p)
+        except OSError:
+            pass
 
 
 # ---------------------------------------------------------------- 统计
@@ -482,6 +530,16 @@ def main():
 
     if not args.force and self_lock_alive():
         log("已有 daemon 在运行（心跳正常），本次退出。要强启加 --force")
+        return 13
+
+    # 全局互斥：exe 版和源码版的数据目录不同，各自的 daemon.lock 看不见对方，
+    # 必须靠这把公共锁拦住「两个一起跑」
+    other = global_lock_alive()
+    if other and not args.force:
+        log("已有另一个实例在运行 —— %s版，pid=%s，数据目录 %s"
+            % (other.get("source", "?"), other.get("pid"), other.get("app_dir", "?")))
+        log("两个一起跑会重复回复、还会抢微信窗口（发送会变得极慢）。"
+            "请先停掉那一个，或加 --force 强行启动")
         return 13
 
     self_lock_touch()
