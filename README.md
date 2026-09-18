@@ -13,7 +13,18 @@
 | ④ 提示词 | 改人设和语风，保存即生效 |
 | ⑤ 运行 & 日志 | 启停常驻监听、看统计、看实时日志、设开机自启 |
 
-项目位置：`D:\Program Files (x86)\自动化\wechat-assistant`
+项目位置：把仓库克隆到你想要的任意目录即可，路径不写死。
+
+## 先做这两件事
+
+```bash
+cp config.example.json config.json   # 复制一份配置，填你自己的 key 和路径
+```
+
+> **关于隐私**：`config.json`（含 API Key、你的 wxid、对方 wxid、本机路径）和
+> `prompt.txt`（你改过的提示词）都已在 `.gitignore` 里，**不会**进仓库，
+> 也不会被打进分发用的 exe —— 换台机器复制过去即可。
+> 仓库里只有 `config.example.json` 这个空模板。
 
 ## 怎么跑起来
 
