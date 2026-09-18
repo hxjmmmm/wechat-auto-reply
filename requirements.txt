@@ -1,0 +1,24 @@
+# 源码方式运行时需要装的依赖
+#   pip install -r requirements.txt
+#
+# 用 Release 里打包好的 exe 则一个都不用装 ——
+# Python 运行时、下面这些库、wechat_cli 全部内置在 exe 里，目标机只要有微信即可。
+
+# 真实键鼠发送（win32api / win32gui / win32clipboard），以及读注册表探微信环境
+pywin32>=306
+
+# 微信窗口自动化：定位窗口、搜索框导航、粘贴发送
+uiautomation>=2.0.20
+
+# uiautomation 的底层依赖
+comtypes>=1.4
+
+# 微信图片 .dat 解密（import 名是 Crypto，不是 pycryptodome）
+pycryptodome>=3.20
+
+# 解压微信数据库里被 zstd 压缩过的消息内容
+zstandard>=0.23
+
+# 读微信本地数据库（消息 / 联系人 / 语音转写）
+# 注意：这个包不在 PyPI 上，需要自行准备，参考 README「源码方式」一节
+# wechat-cli>=0.2.4
