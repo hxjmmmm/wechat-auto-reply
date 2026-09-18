@@ -24,3 +24,6 @@ __pycache__/
 .idea/
 .vscode/
 .DS_Store
+
+# 排错笔记（内部用，不对外）
+审查报告.md
