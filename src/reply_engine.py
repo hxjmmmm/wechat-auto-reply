@@ -259,6 +259,14 @@ def _post(url, llm, messages, temperature):
 MAX_PIECE = 18
 
 
+# 模型「复读」的黑名单。视觉模型（实测 glm-4v-flash）有时会不回内容，
+# 而是把提示词骨架 / 对方刚发的话原样吐回来，例如
+#   "她：[图片]" / "(local_id=710)" / "【输出】"
+# 这种行发出去就是一眼假的机器痕迹，必须在最后一道关口拦掉。
+ECHO_MARKS = ("【输出】", "【最近的对话】", "【她刚发来的消息",
+              "【基本规则】", "【别这么回】", "local_id", "[图片]")
+
+
 def clean_lines(text, max_lines=3, pet_prefix=""):
     """把模型输出整理成要发的若干条消息。
 
@@ -285,6 +293,9 @@ def clean_lines(text, max_lines=3, pet_prefix=""):
             s = s.strip(q)
         s = s.strip()
         if not s:
+            continue
+        # 复读提示词骨架 / 对方原话的行直接丢掉（见 ECHO_MARKS 注释）
+        if any(m in s for m in ECHO_MARKS) or s.startswith(("她：", "我：")):
             continue
         if len(s) <= MAX_PIECE:
             out.append(s)
@@ -382,10 +393,23 @@ def generate(cfg, result, log=None):
                         pass
                 continue
             raise
-        break
 
-    lines = clean_lines(text, int(llm.get("max_lines", 3)),
-                        (cfg or {}).get("pet_prefix", ""))
+        lines = clean_lines(text, int(llm.get("max_lines", 3)),
+                            (cfg or {}).get("pet_prefix", ""))
+        # 接口没报错，但一条都清不出来 —— 多半是视觉模型把提示词骨架复读了一遍
+        # （实测 glm-4v-flash 会输出「她：[图片] / (local_id=710) / 【输出】」）。
+        # 这种情况也按失败处理：丢图退回文本模型，最差是自然接话，
+        # 而不是把「【输出】」这种东西真发出去。
+        if not lines and can_downgrade:
+            can_downgrade = False
+            use_vision = False
+            if log:
+                try:
+                    log(f"视觉模型 {model} 输出复读（无可发内容）→ 丢弃图片改用 {llm['model']} 重试")
+                except Exception:
+                    pass
+            continue
+        break
 
     meta = {"model": model, "vision": use_vision, "has_image": has_img,
             "usage": usage, "raw": text}

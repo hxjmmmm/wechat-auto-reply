@@ -18,7 +18,8 @@ import os
 import subprocess
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.abspath(__file__))          # src/
+ROOT = os.path.dirname(HERE)                                # 项目根（src 的上一级）
 
 
 def is_frozen():
@@ -50,13 +51,18 @@ def app_dir():
          于是 config.json / data 全跑到临时目录去了 ——
          表现就是「校验恒失败 FileNotFoundError」，而消息其实早发出去了。
       2) 打包运行 → exe 所在目录
-      3) 源码运行 → 脚本所在目录
+      3) 源码运行 → 项目根（代码在 src/ 下，所以是 src 的上一级；
+         靠 config.json / data 这两个标志物确认，万一哪天代码又摊平回根目录也不会找错）
     """
     env_dir = os.environ.get("WX_APP_DIR", "").strip()
     if env_dir and os.path.isdir(env_dir):
         return env_dir
     if is_frozen():
         return os.path.dirname(os.path.abspath(sys.executable))
+    for cand in (ROOT, HERE):
+        if (os.path.exists(os.path.join(cand, "config.json"))
+                or os.path.isdir(os.path.join(cand, "data"))):
+            return cand
     return HERE
 
 
@@ -67,6 +73,8 @@ def search_dirs():
         dirs.append(meipass)
         dirs.append(os.path.join(meipass, "scripts"))
     dirs.append(os.path.join(app_dir(), "scripts"))
+    # 截图/OCR 这类辅助脚本放在 tools/ 下，源码运行时也要能按名字找到
+    dirs.append(os.path.join(app_dir(), "tools"))
     seen, out = set(), []
     for d in dirs:
         if d and d not in seen and os.path.isdir(d):

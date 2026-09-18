@@ -48,10 +48,11 @@ python -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
 
 cp config.example.json config.json     # 复制一份配置再填
-python gui.py                          # 打开界面
+python src/gui.py                      # 打开界面
 ```
 
-**环境要求**：Windows 10/11 + Python 3.10 及以上（`tkinter` 用官方安装包自带的即可）。
+**环境要求**：Windows 10/11 + Python 3.10 及以上，**Python 必须自带 `tkinter`**
+（官方安装包 / miniconda 都带；某些精简版不带，那样界面起不来 —— 见 `requirements.txt` 顶部说明）。
 装了微信 PC 版 4.x 且当前处于登录状态。
 
 **一个前提**：读微信数据库依赖 `wechat_cli` 包，这个包**不在 PyPI 上**
@@ -66,9 +67,12 @@ python gui.py                          # 打开界面
 
 ## 三、打包 exe
 
+打包要用**单独的环境**（别把 PyInstaller 装进 `.venv`）：
+
 ```bash
-pip install -r requirements-build.txt
-python build_exe.py
+python -m venv .build\venv
+.build\venv\Scripts\python.exe -m pip install -r tools\requirements-build.txt
+.build\venv\Scripts\python.exe tools\build_exe.py
 ```
 
 产物 `dist\微信自动回复助手.exe`（约 24 MB）。
@@ -86,36 +90,55 @@ python build_exe.py
 
 ---
 
-## 四、现在的运行架构
+## 四、目录结构
 
 ```
-daemon.py（常驻后台）
+wechat-assistant/
+├─ src/                  运行时代码（全部在这）
+│   ├─ launcher.py       总入口：开界面 / 后台常驻 / 用自己当解释器跑伴随脚本
+│   ├─ gui.py            图形界面（五个页签，纯 tkinter）
+│   ├─ daemon.py         常驻监听主程序，看门狗式，单轮异常不退出
+│   ├─ monitor.py        检测逻辑：新消息 / 待回复队列 / 基线
+│   ├─ reply_engine.py   调大模型生成回复（OpenAI 兼容接口，只用标准库 urllib）
+│   ├─ send_v2.py        微信窗口导航 + 键鼠发送 + 发送后校验
+│   ├─ verify_sent.py    读数据库确认消息落在了对方会话
+│   ├─ decrypt_image.py  解密微信图片 .dat（供视觉模型使用）
+│   ├─ voice_text.py     读取语音消息的转写文字
+│   ├─ wxenv.py          自动探测微信环境（注册表 / 数据目录 / 账号 / 联系人）
+│   ├─ runner.py         统一「怎么调伴随脚本」，打包后靠它自包含运行
+│   └─ notify.py         桌面通知
+├─ tools/                开发/构建用，不进运行时
+│   ├─ build_exe.py      一键打包成单文件 exe
+│   ├─ _shot.ps1         截图（发送后视觉校验用）
+│   └─ ocr.ps1           OCR
+├─ docs/                 文档
+├─ data/                 运行时数据：日志、队列、解密出的图片（不进仓库）
+├─ dist/                 打包产物
+├─ .venv/                项目专属虚拟环境（依赖都装在这，不进仓库）
+├─ config.json           本机配置（含 key / wxid，不进仓库）
+├─ config.example.json   配置模板
+├─ prompt.txt            提示词（界面里改，不进仓库）
+├─ requirements*.txt     依赖清单
+└─ start-daemon.cmd      一键启动常驻监听
+```
+
+**注意**：`runner.app_dir()` 才算「项目根」—— 代码在 `src/` 下，配置和 `data/`
+必须留在根目录，所以它是靠 `config.json` / `data` 这两个标志物往上找一级的。
+
+## 五、现在的运行架构
+
+```
+src/daemon.py（常驻后台）
   └─ 每 N 秒读一次本地微信数据库        ← 不花任何 token
      └─ 检测到对方有新消息
-        ├─ reply_engine.py  → 调一次大模型生成回复
-        └─ send_v2.py       → 真实键鼠发送 → verify_sent.py 读库校验
-                              └─ 确认落在对方会话 → 才清空待回复队列
+        ├─ src/reply_engine.py  → 调一次大模型生成回复
+        └─ src/send_v2.py       → 真实键鼠发送 → src/verify_sent.py 读库校验
+                                  └─ 确认落在对方会话 → 才清空待回复队列
 ```
-
-| 文件 | 作用 |
-|---|---|
-| `launcher.py` | 总入口：开界面 / 后台常驻 / 用自己当解释器跑伴随脚本 |
-| `gui.py` | 图形界面（五个页签，纯 tkinter） |
-| `daemon.py` | 常驻监听主程序，看门狗式，单轮异常不退出 |
-| `monitor.py` | 检测逻辑：新消息 / 待回复队列 / 基线 |
-| `reply_engine.py` | 调大模型生成回复（OpenAI 兼容接口，只用标准库 urllib） |
-| `send_v2.py` | 微信窗口导航 + 键鼠发送 + 发送后校验 |
-| `verify_sent.py` | 读数据库确认消息落在了对方会话 |
-| `decrypt_image.py` | 解密微信图片 `.dat`（供视觉模型使用） |
-| `voice_text.py` | 读取语音消息的转写文字 |
-| `wxenv.py` | 自动探测微信环境（注册表 / 数据目录 / 账号 / 联系人） |
-| `runner.py` | 统一「怎么调伴随脚本」，打包后靠它自包含运行 |
-| `notify.py` | 桌面通知 |
-| `build_exe.py` | 一键打包成单文件 exe |
 
 ---
 
-## 五、配置（`config.json`）
+## 六、配置（`config.json`）
 
 复制 `config.example.json` 改名即可。主要字段：
 
@@ -144,7 +167,7 @@ key 也可以放环境变量 `WECHAT_LLM_KEY`，不写进文件。
 
 ---
 
-## 六、发送安全机制
+## 七、发送安全机制
 
 - **发送前**：导航到搜索结果后校验目标会话，不对就不落字
 - **发送后**：读数据库确认消息真的在对方会话里；确认了才清队列
@@ -155,7 +178,7 @@ key 也可以放环境变量 `WECHAT_LLM_KEY`，不写进文件。
 
 ---
 
-## 七、排障
+## 八、排障
 
 | 文件 | 看什么 |
 |---|---|
@@ -165,9 +188,9 @@ key 也可以放环境变量 `WECHAT_LLM_KEY`，不写进文件。
 | `data/send_result.json` | 发送子进程的原始返回 |
 
 ```bash
-python daemon.py --test-llm          # 用一句假消息试模型，验 key
-python daemon.py --once --no-send    # 只检测 + 生成回复，不发送
-python daemon.py --status            # 是否在跑、统计、待回复条数
+python src/daemon.py --test-llm          # 用一句假消息试模型，验 key
+python src/daemon.py --once --no-send    # 只检测 + 生成回复，不发送
+python src/daemon.py --status            # 是否在跑、统计、待回复条数
 ```
 
 常见情况：
@@ -178,7 +201,7 @@ python daemon.py --status            # 是否在跑、统计、待回复条数
 
 ---
 
-## 八、隐私
+## 九、隐私
 
 - 所有读取、解密都在**本机**完成，代码无任何网络上传行为
 - `config.json`（含 API Key、双方 wxid、本机路径）与 `prompt.txt`（自定义提示词）

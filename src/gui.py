@@ -238,8 +238,8 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(f"{APP_TITLE} v{APP_VER}")
-        self.geometry("980x720")
-        self.minsize(880, 620)
+        self.geometry("980x800")
+        self.minsize(880, 700)
         self.cfg = load_cfg()
         self.env = {}
         self.contacts = []
@@ -268,54 +268,149 @@ class App(tk.Tk):
 
     # ------------------------------------------------------------ 样式
 
+    # 配色（微信绿主题）
+    C_BG      = "#f2f3f5"   # 窗口底色
+    C_CARD    = "#ffffff"   # 卡片 / 输入框 / 文本区
+    C_ACCENT  = "#07c160"   # 主色
+    C_ACCENT_D = "#05a351"  # 主色 · 悬停/按下
+    C_TEXT    = "#1f2329"
+    C_MUTED   = "#86909c"
+    C_BORDER  = "#dcdfe4"
+    C_OK      = "#1a7f37"
+    C_BAD     = "#d93026"
+
     def _init_style(self):
+        self.configure(bg=self.C_BG)
+        st = ttk.Style(self)
         try:
-            ttk.Style().theme_use("clam")
+            st.theme_use("clam")
         except tk.TclError:
             pass
-        st = ttk.Style()
-        st.configure(".", font=FONT)
-        st.configure("TLabel", font=FONT)
-        st.configure("TCheckbutton", font=FONT)
-        st.configure("TButton", font=FONT, padding=(10, 4))
-        st.configure("Accent.TButton", font=FONT_B, padding=(14, 6))
-        st.configure("TNotebook.Tab", font=FONT, padding=(16, 7))
-        st.configure("TLabelframe.Label", font=FONT_B)
-        st.configure("Treeview", font=FONT, rowheight=24)
-        st.configure("Treeview.Heading", font=FONT_B)
-        st.configure("Hint.TLabel", font=FONT_S, foreground="#777777")
-        st.configure("Ok.TLabel", font=FONT_S, foreground="#1a7f37")
-        st.configure("Bad.TLabel", font=FONT_S, foreground="#c0392b")
+
+        # 全局基调
+        st.configure(".", font=FONT, background=self.C_BG, foreground=self.C_TEXT,
+                     bordercolor=self.C_BORDER, darkcolor=self.C_CARD,
+                     lightcolor=self.C_CARD, fieldbackground=self.C_CARD,
+                     troughcolor=self.C_BG, focuscolor=self.C_ACCENT)
+        st.configure("TFrame", background=self.C_BG)
+        st.configure("Tab.TFrame", background=self.C_BG, padding=(14, 12))
+        st.configure("TLabel", background=self.C_BG, foreground=self.C_TEXT)
+        st.configure("TCheckbutton", background=self.C_BG)
+        st.map("TCheckbutton", background=[("active", self.C_BG)])
+
+        # 按钮：普通白底描边，主按钮绿色实心
+        st.configure("TButton", font=FONT, padding=(12, 6),
+                     background=self.C_CARD, foreground=self.C_TEXT,
+                     bordercolor=self.C_BORDER, focusthickness=0)
+        st.map("TButton",
+               background=[("pressed", "#e8eaed"), ("active", "#eff1f3")],
+               bordercolor=[("focus", self.C_ACCENT)])
+        st.configure("Accent.TButton", font=FONT_B, padding=(16, 7),
+                     background=self.C_ACCENT, foreground="#ffffff",
+                     bordercolor=self.C_ACCENT)
+        st.map("Accent.TButton",
+               background=[("pressed", "#048f49"), ("active", self.C_ACCENT_D),
+                           ("disabled", "#b7e7cd")],
+               bordercolor=[("active", self.C_ACCENT_D)],
+               foreground=[("disabled", "#ffffff")])
+
+        # 页签：未选灰、选中白
+        st.configure("TNotebook", background=self.C_BG, bordercolor=self.C_BG,
+                     tabmargins=(4, 4, 4, 0))
+        st.configure("TNotebook.Tab", font=FONT, padding=(20, 9),
+                     background="#e4e6ea", foreground="#4e5969")
+        st.map("TNotebook.Tab",
+               background=[("selected", self.C_CARD), ("active", "#eef0f2")],
+               foreground=[("selected", self.C_TEXT)])
+
+        # 分组框
+        st.configure("TLabelframe", background=self.C_BG,
+                     bordercolor=self.C_BORDER)
+        st.configure("TLabelframe.Label", font=FONT_B,
+                     background=self.C_BG, foreground="#4e5969")
+
+        # 输入控件：白底、聚焦绿框
+        for w in ("TEntry", "TCombobox", "TSpinbox"):
+            st.configure(w, padding=4, fieldbackground=self.C_CARD,
+                         bordercolor=self.C_BORDER, arrowcolor="#86909c")
+            st.map(w, bordercolor=[("focus", self.C_ACCENT)])
+
+        # 表格
+        st.configure("Treeview", font=FONT, rowheight=28,
+                     background=self.C_CARD, fieldbackground=self.C_CARD,
+                     foreground=self.C_TEXT, bordercolor=self.C_BORDER)
+        st.map("Treeview",
+               background=[("selected", self.C_ACCENT)],
+               foreground=[("selected", "#ffffff")])
+        st.configure("Treeview.Heading", font=FONT_B, padding=(8, 6),
+                     background="#f0f1f3", foreground="#4e5969",
+                     bordercolor=self.C_BORDER)
+        st.map("Treeview.Heading", background=[("active", "#e6e8eb")])
+
+        # 状态文字
+        st.configure("Hint.TLabel", font=FONT_S, foreground=self.C_MUTED,
+                     background=self.C_BG)
+        st.configure("Ok.TLabel", font=FONT_S, foreground=self.C_OK,
+                     background=self.C_BG)
+        st.configure("Bad.TLabel", font=FONT_S, foreground=self.C_BAD,
+                     background=self.C_BG)
+
+    def _style_text(self, w):
+        """ScrolledText 是纯 tk 控件，不吃 ttk 样式，这里统一外观"""
+        w.configure(bg=self.C_CARD, fg=self.C_TEXT, relief="flat",
+                    highlightthickness=1, highlightbackground=self.C_BORDER,
+                    highlightcolor=self.C_ACCENT, padx=8, pady=6,
+                    insertbackground=self.C_TEXT, selectbackground="#c9f0db")
 
     # ------------------------------------------------------------ 布局
 
     def _build(self):
-        nb = ttk.Notebook(self)
-        nb.pack(fill="both", expand=True, padx=10, pady=(10, 0))
+        # 顶部标题栏
+        head = tk.Frame(self, bg=self.C_CARD)
+        head.pack(fill="x")
+        tk.Label(head, text="💬 " + APP_TITLE, bg=self.C_CARD, fg=self.C_TEXT,
+                 font=("Microsoft YaHei UI", 13, "bold")).pack(
+            side="left", padx=(16, 8), pady=12)
+        tk.Label(head, text=f"v{APP_VER}", bg=self.C_CARD, fg=self.C_MUTED,
+                 font=FONT_S).pack(side="left", pady=12)
+        tk.Label(head, text="按 ①→⑤ 顺序配置一遍即可使用",
+                 bg=self.C_CARD, fg=self.C_MUTED, font=FONT_S).pack(
+            side="right", padx=16, pady=12)
+        tk.Frame(self, bg=self.C_BORDER, height=1).pack(fill="x")
 
-        self.tab_env = ttk.Frame(nb); nb.add(self.tab_env, text="① 环境 & 账号")
-        self.tab_contact = ttk.Frame(nb); nb.add(self.tab_contact, text="② 联系人")
-        self.tab_llm = ttk.Frame(nb); nb.add(self.tab_llm, text="③ 模型 API")
-        self.tab_prompt = ttk.Frame(nb); nb.add(self.tab_prompt, text="④ 提示词")
-        self.tab_run = ttk.Frame(nb); nb.add(self.tab_run, text="⑤ 运行 & 日志")
+        # 底部操作条先 pack（side=bottom），保证窗口偏小时也不被内容挤掉
+        tk.Frame(self, bg=self.C_BORDER, height=1).pack(side="bottom", fill="x")
+        bar = ttk.Frame(self)
+        bar.pack(side="bottom", fill="x", padx=12, pady=10)
+        ttk.Button(bar, text="保存全部配置", style="Accent.TButton",
+                   command=self.save_all).pack(side="left")
+        self.btn_start = ttk.Button(bar, text="▶ 启动监听", command=self.start_daemon)
+        self.btn_start.pack(side="left", padx=(12, 6))
+        ttk.Button(bar, text="■ 停止", command=self.stop_daemon).pack(side="left")
+        ttk.Button(bar, text="打开项目文件夹", command=self.open_folder).pack(side="left", padx=12)
+
+        self.lbl_status = ttk.Label(bar, text="就绪", style="Hint.TLabel")
+        self.lbl_status.pack(side="right")
+
+        nb = ttk.Notebook(self)
+        nb.pack(fill="both", expand=True, padx=12, pady=(10, 0))
+
+        self.tab_env = ttk.Frame(nb, style="Tab.TFrame")
+        nb.add(self.tab_env, text="① 环境 & 账号")
+        self.tab_contact = ttk.Frame(nb, style="Tab.TFrame")
+        nb.add(self.tab_contact, text="② 联系人")
+        self.tab_llm = ttk.Frame(nb, style="Tab.TFrame")
+        nb.add(self.tab_llm, text="③ 模型 API")
+        self.tab_prompt = ttk.Frame(nb, style="Tab.TFrame")
+        nb.add(self.tab_prompt, text="④ 提示词")
+        self.tab_run = ttk.Frame(nb, style="Tab.TFrame")
+        nb.add(self.tab_run, text="⑤ 运行 & 日志")
 
         self._build_env()
         self._build_contact()
         self._build_llm()
         self._build_prompt()
         self._build_run()
-
-        bar = ttk.Frame(self)
-        bar.pack(fill="x", padx=10, pady=8)
-        ttk.Button(bar, text="保存全部配置", style="Accent.TButton",
-                   command=self.save_all).pack(side="left")
-        self.btn_start = ttk.Button(bar, text="▶ 启动监听", command=self.start_daemon)
-        self.btn_start.pack(side="left", padx=(10, 4))
-        ttk.Button(bar, text="■ 停止", command=self.stop_daemon).pack(side="left")
-        ttk.Button(bar, text="打开项目文件夹", command=self.open_folder).pack(side="left", padx=10)
-
-        self.lbl_status = ttk.Label(bar, text="就绪", style="Hint.TLabel")
-        self.lbl_status.pack(side="right")
 
     # ---------- ① 环境 & 账号 ----------
 
@@ -836,6 +931,7 @@ class App(tk.Tk):
         win.title("实际发送给模型的内容")
         win.geometry("760x560")
         txt = ScrolledText(win, font=MONO, wrap="word")
+        self._style_text(txt)
         txt.pack(fill="both", expand=True, padx=8, pady=8)
         txt.insert("1.0", "===== 系统提示词 =====\n" + reply_engine.load_prompt()
                    + "\n\n===== 用户消息 =====\n" + str(content))
@@ -882,6 +978,7 @@ class App(tk.Tk):
 
         ttk.Label(f, text="实时日志（daemon.log）：", style="Hint.TLabel").pack(anchor="w", padx=8, pady=(6, 2))
         self.txt_log = ScrolledText(f, font=MONO, wrap="none", height=14)
+        self._style_text(self.txt_log)
         self.txt_log.pack(fill="both", expand=True, padx=4, pady=(0, 8))
         self.txt_log.configure(state="disabled")
 
@@ -1000,7 +1097,9 @@ class App(tk.Tk):
         if runner.is_frozen():
             cmd = [sys.executable, "--daemon-run"]
         else:
-            cmd = [sys.executable, os.path.join(HERE, "daemon.py")]
+            # 代码在 src/ 下，统一走 runner 按名字定位（打包/源码两种布局都能找到）
+            cmd = [sys.executable, runner.script_path("daemon.py") or
+                   os.path.join(HERE, "src", "daemon.py")]
         flags = 0
         if sys.platform.startswith("win"):
             flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)

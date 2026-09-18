@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 """build_exe.py — 把「微信自动回复助手」打包成单个 exe
 
-用法（项目目录下）：
-    .build\\venv\\Scripts\\python.exe build_exe.py
+用法（项目目录下）——**必须用打包专用环境跑**，.venv 里没有 PyInstaller：
+
+    python -m venv .build\\venv
+    .build\\venv\\Scripts\\python.exe -m pip install -r requirements-build.txt
+    .build\\venv\\Scripts\\python.exe tools\\build_exe.py
 
 产物：
     dist\\微信自动回复助手.exe     单文件，双击即用；目标机不需要装 Python
@@ -21,7 +24,10 @@ import shutil
 import subprocess
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+# 本文件在 tools/ 下，项目根是它的上一级
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SRC_DIR = os.path.join(HERE, "src")
+TOOLS_DIR = os.path.join(HERE, "tools")
 
 APP_NAME = "微信自动回复助手"
 ENTRY = "launcher.py"
@@ -136,7 +142,26 @@ def verify(exe):
     return ok
 
 
+def check_env():
+    """确认当前解释器装了 PyInstaller。
+
+    踩过的坑：拿运行用的 .venv 直接跑这个脚本，会得到一行没头没尾的
+    "No module named PyInstaller" + rc=1。这里把原因和该用什么命令说清楚。
+    """
+    try:
+        import PyInstaller  # noqa: F401
+        return True
+    except ImportError:
+        print("当前环境没有 PyInstaller —— 打包要用**打包专用环境**，不是运行用的 .venv：")
+        print("    python -m venv .build\\venv")
+        print("    .build\\venv\\Scripts\\python.exe -m pip install -r tools\\requirements-build.txt")
+        print("    .build\\venv\\Scripts\\python.exe tools\\build_exe.py")
+        return False
+
+
 def build():
+    if not check_env():
+        return 1
     fix_dll_search_path()
     # PyInstaller 收尾时会 os.remove 掉同名旧 exe。某些环境下「删除」会被安全策略拦住，
     # 整个打包就崩在最后一步 —— 所以先把它挪成 .old（重命名不是删除），让它无旧可删。
@@ -149,15 +174,24 @@ def build():
             "--distpath", os.path.join(HERE, "dist"),
             "--workpath", os.path.join(HERE, ".build", "work"),
             "--specpath", os.path.join(HERE, ".build"),
+            "--paths", SRC_DIR,
             "--paths", HERE,
             "--log-level", "INFO"]
 
-    for f in SCRIPTS + EXTRAS + ASSETS:
-        p = os.path.join(HERE, f)
+    # 脚本在 src/，ps1 这类辅助文件在 tools/，全部打进 exe 的根（_MEIPASS），
+    # 这样 runner.script_path 按文件名就能找到
+    for f in SCRIPTS + EXTRAS:
+        p = os.path.join(SRC_DIR, f)
         if os.path.exists(p):
             args += ["--add-data", f"{p}{sep()}."]
         else:
-            print(f"[warn] 缺少 {f}，跳过")
+            print(f"[warn] 缺少 src/{f}，跳过")
+    for f in ASSETS:
+        p = os.path.join(TOOLS_DIR, f)
+        if os.path.exists(p):
+            args += ["--add-data", f"{p}{sep()}."]
+        else:
+            print(f"[warn] 缺少 tools/{f}，跳过")
 
     # 让 exe 找到自己（子进程模式）时也能定位到伴随脚本
     args += ["--collect-submodules", "wechat_cli"]
@@ -167,7 +201,7 @@ def build():
     for m in HIDDEN:
         args += ["--hidden-import", m]
 
-    args.append(os.path.join(HERE, ENTRY))
+    args.append(os.path.join(SRC_DIR, ENTRY))
 
     print("=" * 70)
     print(f"开始打包：{APP_NAME}.exe")

@@ -1,6 +1,13 @@
 # 源码方式运行时需要装的依赖
 #   pip install -r requirements.txt
 #
+# 图形界面（gui.py）还需要 tkinter —— 但它不是 pip 包，装不了，只能靠 Python 本体自带。
+# 坑：某些精简版 Python（实测 WorkBuddy 的托管 python 3.13.12）不带 tkinter，
+#     用它建的 venv 跑 gui.py 会直接 ModuleNotFoundError: No module named 'tkinter'。
+#     建 venv 请挑带 tkinter 的解释器（miniconda / Anaconda / 官方 CPython 安装包都带）：
+#       C:\Users\<你的用户名>\miniconda3\python.exe -m venv .venv
+#     验证：.venv\Scripts\python.exe -c "import tkinter; print(tkinter.TkVersion)"
+#
 # 用 Release 里打包好的 exe 则一个都不用装 ——
 # Python 运行时、下面这些库、wechat_cli 全部内置在 exe 里，目标机只要有微信即可。
 

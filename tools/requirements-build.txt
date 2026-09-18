@@ -1,0 +1,15 @@
+# 打包成单文件 exe 时才需要 —— 装在**打包专用环境**里，不要装进 .venv
+# （.venv 是给程序跑起来用的，塞进 PyInstaller 只会让它白白变大）
+#
+#   python -m venv .build\venv
+#   .build\venv\Scripts\python.exe -m pip install -r tools\requirements-build.txt
+#   .build\venv\Scripts\python.exe tools\build_exe.py
+#
+# 产物：dist\微信自动回复助手.exe
+#
+# 本文件跟打包脚本一起放在 tools/ 下，运行时依赖在项目根的 requirements.txt
+
+-r ../requirements.txt
+
+pyinstaller>=6.0
+pyinstaller-hooks-contrib>=2024.0
