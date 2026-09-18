@@ -1,0 +1,28 @@
+{
+  "contact": "",
+  "contact_wxid": "",
+  "my_wxid": "",
+  "poll_seconds": 20,
+  "history_limit": 60,
+  "notify": true,
+  "auto_send": true,
+  "db_dir": "",
+  "wechat_cli": "",
+  "decrypt_python": "",
+  "send_python": "",
+  "install_path": "",
+  "version_name": "",
+  "data_root": "",
+  "account_code": "",
+  "pet_prefix": "",
+  "llm": {
+    "enabled": true,
+    "base_url": "https://open.bigmodel.cn/api/paas/v4",
+    "api_key": "",
+    "model": "glm-4-flash",
+    "vision_model": "glm-4v-flash",
+    "temperature": 0.9,
+    "max_tokens": 200,
+    "max_lines": 3
+  }
+}
